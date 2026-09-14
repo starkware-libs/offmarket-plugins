@@ -106,10 +106,16 @@ Builder-signed calls — a documented degrade, not a failed start — so set it 
 size. When a user says "paymaster key" or "prover", map it to the name above — do not guess a
 variant. The README's env table says what each one means.
 
-`PMP_EVM_PRIVATE_KEY` is **not** yours to supply: `init` generates a fresh identity into the
-0600 file and prints only the derived **EVM address** — that address is what gets funded in
-step 7. Never ask for a private key and never repeat one back; a user importing an existing
-identity runs `pmp-mcp init --no-key` and pastes theirs into the file themselves.
+`PMP_EVM_PRIVATE_KEY` is **not** yours to supply: `init` generates a fresh identity, stores it in
+the **OS keychain**, writes only a `keychain:<id>` reference into the 0600 file, and prints the
+derived **EVM address** — that address is what gets funded in step 7. Never ask for a private key
+and never repeat one back; a user importing an existing identity runs `pmp-mcp init --no-key` and
+supplies theirs as the `PMP_EVM_PRIVATE_KEY` environment variable. If `init` reports the keychain
+refused, the first remedy is to unlock it and run again; only on a host that truly has none
+(container, CI, headless Linux) does `pmp-mcp init --print-key` hand the key over once, for that
+same environment variable — **the user runs that themselves, in their own terminal**: never run
+it for them and never repeat its output back, or the key lands in this transcript forever. The keychain keeps the key out of repos, backups and file sync — it
+does not protect against another process running as the same user.
 
 In the managed profile the only secrets are the generated `PMP_EVM_PRIVATE_KEY` and `PMP_OFFMARKET_API_KEY`.
 
@@ -189,9 +195,10 @@ looking for markets until the user answers:
 > minus 0.20 USDC** — the paymaster keeps that much on the address to pay Polygon gas in USDC.
 > Send 10.00 and we deposit 9.80. Tell me when it has landed and I will run `deposit_to_pool`.
 >
-> One thing first: **back up `.env.pmp`**. `init` generated that identity and the file holds the
-> only copy of its key — no seed phrase, no copy on any server. Lose the file and you lose
-> whatever is on that address and in the pool behind it.
+> One thing first: **back up your keychain entry** (service `pmp-mcp`). `init` generated that
+> identity and the keychain holds the only copy of its key — no seed phrase, no copy on any
+> server. Lose it and you lose whatever is on that address and in the pool behind it. Keep
+> `.env.pmp` too: it holds the reference that finds the key.
 
 Then deposit `balance − 0.20`, never the balance: an over-ask refuses
 `GASLESS_DEPOSIT_INSUFFICIENT_USDC` and the refusal carries `maxDepositMicro` — re-call with that

@@ -25,7 +25,7 @@ everything else is per-profile (Managed / Local below) or optional here.
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `PMP_EVM_PRIVATE_KEY` | ✅ | Identity seed, 32-byte hex. **`init` generates one** (pass `--no-key` to import your own) and prints only the derived EVM address. In-memory — never logged, persisted, or mapped into core. |
+| `PMP_EVM_PRIVATE_KEY` | ✅ | Identity seed. Either a raw 32-byte hex key (how servers and containers inject it — it always wins) or `keychain:<id>`, the reference `init` writes after storing the key in the **OS keychain** (service `pmp-mcp`, account `<id>`). Resolved in memory at start; never logged, never written back to disk, never mapped into core. |
 | `PMP_STORAGE_DIR` | — | Durable store (**burn cursors**). Defaults to `~/.local/share/pmp-mcp/<eoa-address>` (per identity), printed to stderr at start. Lost dir = lost recovery. Locked while running. **In a container:** mount a volume and set this, or the cursors die with it. |
 | `PMP_OZ_ACCOUNT_CLASS_HASH` | — | Account class hash; defaults to the mainnet OZ class this project deploys (`PMP_OZ_ACCOUNT_CLASS_HASH_MAINNET` wins if set). |
 | `PMP_MAX_ORDER_USDC` | — | Per-order notional cap. **UNSET REFUSES** every order tool (`ORDER_CAP_UNSET`). |
@@ -88,6 +88,7 @@ and `check` read `./.env.pmp` from the current directory.
 
 ```
 <pmp-mcp> init              # writes ./.env.pmp 0600 (annotated; refuses to overwrite)
+<pmp-mcp> init --print-key  # only when this host has no keychain: hands you the key once
 <pmp-mcp> init --managed    # the managed template instead: gateway + API key, no local endpoints
 $EDITOR .env.pmp            # fill every blank; replace the free defaults if you have better
 <pmp-mcp> check             # per-variable set / missing / malformed / default, values redacted, exit 1 on any problem
@@ -104,8 +105,41 @@ Managed is two lines and no editor — the key never has to pass through an agen
 `--env-file <path>`) leaving every other line and the file's mode untouched, and prints a masked
 confirmation only.
 
-`init` writes the file **0600** because it holds `PMP_EVM_PRIVATE_KEY`. If you copy it anywhere,
-`chmod 600` the copy.
+### Where the identity key lives
+
+`init` stores the generated key in the **OS keychain** — macOS Keychain, Linux Secret Service,
+Windows Credential Manager — under service `pmp-mcp`, and writes only `PMP_EVM_PRIVATE_KEY=keychain:<id>`
+into `./.env.pmp` (still **0600**; it holds your other secrets). The key is never **in plaintext**
+on disk; the backend keeps its own encrypted store.
+
+**What that buys:** the key is out of your repo, your backups, your dotfile sync, and any file you
+paste or copy. It is **not** a sandbox — anything running as your user can ask the keychain for it.
+
+**Keychain refuses** (locked, a dismissed macOS prompt, or none at all — headless Linux, a
+container, CI, WSL): `init` writes **nothing** and exits 1. `@napi-rs/keyring` cannot tell a
+transient refusal from an absent keychain, so **retrying** after unlocking is the first remedy.
+On a host that genuinely has none, `pmp-mcp init --print-key` prints the key **once** to stdout,
+leaves the key line blank, and you inject it as the `PMP_EVM_PRIVATE_KEY` environment variable
+from a secrets manager, a systemd credential, or a CI secret — the supported server path.
+
+**Legacy plaintext files migrate themselves.** A serve start (when the file's key is the one the
+run is using) or `check` that finds a raw key in `./.env.pmp` moves it into the keychain,
+collapses the line to `keychain:<id>` (mode preserved), and says so in one line — never the key.
+With no keychain it changes nothing and warns that the key is sitting in plaintext.
+`check --env-file <path>` never migrates: it is a read-only diagnostic.
+
+**Linux:** a **Secret Service** provider over D-Bus (gnome-keyring, KWallet) is required. Without
+one `@napi-rs/keyring` silently falls back to the **kernel keyutils** store, where the write and
+the read-back both succeed but nothing — not `findCredentials`, not `secret-tool` — can see the
+entry, and it may not survive logout. `init` therefore also requires the store to **list** what it
+just wrote, deletes the entry when it cannot, and fails closed: on a headless box, run a keyring
+daemon or use `--print-key` plus the environment variable.
+
+**macOS:** the first access after a Node upgrade re-prompts ("node wants to access pmp-mcp").
+Click **Always Allow**, or a headless agent run blocks on an invisible dialog.
+
+A start or `check` with a `keychain:<id>` it cannot resolve — no keychain, or the entry is gone —
+fails with one line naming `PMP_EVM_PRIVATE_KEY` and the env-var remedy.
 
 `check` never opens `PMP_STORAGE_DIR`, so it is safe to run against a live server; in **managed**
 mode it makes one request to the gateway (see below). It covers `PMP_OZ_ACCOUNT_CLASS_HASH`,
@@ -121,9 +155,9 @@ free-tier** Polymarket builder credential so a first run works. That shared cred
 rate limit for everyone who never changed it and can be revoked; create your own through the
 Polymarket builder program before trading real size.
 
-It also **generates `PMP_EVM_PRIVATE_KEY`** — a fresh 32-byte CSPRNG identity — and prints only
-the derived EVM address, how to fund it, and a reminder to **back the file up**: it holds the
-only copy of that key. The first `fund_wallet` seeds its index from CHAIN, so a fresh
+It also **generates `PMP_EVM_PRIVATE_KEY`** — a fresh 32-byte CSPRNG identity — stores it in the
+OS keychain (above) and prints only the derived EVM address, how to fund it, and a reminder to
+**back up that keychain entry**: it is the only copy of the key. The first `fund_wallet` seeds its index from CHAIN, so a fresh
 identity starts at 0 with no floor to set. Pass `--no-key` to leave the key line blank and
 import an existing identity instead. Every operator-owned service endpoint still stays blank by design:
 a defaulted prover or paymaster URL would silently route proofs through a host you did not choose.
@@ -217,7 +251,7 @@ claude plugin validate packages/mcp-server
 claude --plugin-dir packages/mcp-server
 ```
 
-The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.2` — a marketplace install gets the
+The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.3` — a marketplace install gets the
 repo's **source**, never a built `dist`, so the server comes from the registry; the version is
 pinned — and reads the same `PMP_*` names from your shell — source your env file before launching. For the **managed** profile,
 export `PMP_INFRA_MODE=managed` and `PMP_OFFMARKET_API_KEY` in place of the local endpoint set;
