@@ -1,0 +1,8 @@
+{
+  "name": "pmp-mcp",
+  "description": "Private Polymarket trading over the starknet-privacy pool: a setup CLI, read-only market discovery, and the fund-moving MCP tools with operator guardrails.",
+  "version": "0.1.2",
+  "author": {
+    "name": "StarkWare"
+  }
+}
