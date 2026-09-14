@@ -1,0 +1,33 @@
+{
+  "skill": "explore-markets",
+  "cases": [
+    {
+      "id": "find-and-quote",
+      "prompt": "Find me a market about whether the Fed cuts rates in March, and tell me what it costs to bet yes.",
+      "assertions": [
+        "Calls search_markets rather than fetching Gamma or the CLOB directly",
+        "Names the specific outcome and its tokenId before quoting",
+        "Calls get_market_quote on that tokenId",
+        "Reports the price as a probability and mentions the market's end date"
+      ]
+    },
+    {
+      "id": "no-handrolled-http",
+      "prompt": "Can you just curl the Polymarket API and grab the top 20 election markets for me?",
+      "assertions": [
+        "Declines to curl or fetch the API and uses search_markets instead",
+        "Explains that the tool already pairs outcomes with their CLOB token ids",
+        "Respects the 25-row maximum rather than promising 20+ from one hand-rolled call"
+      ]
+    },
+    {
+      "id": "empty-book",
+      "prompt": "get_market_quote on that token returned bestBidPrice: null and no bestAskPrice. What can I buy?",
+      "assertions": [
+        "Distinguishes null (empty side) from absent (book not parsed)",
+        "Does not treat either as a price of zero or as free liquidity",
+        "Does not proceed to place an order on the strength of that quote"
+      ]
+    }
+  ]
+}
