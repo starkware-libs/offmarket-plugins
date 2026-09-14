@@ -217,7 +217,7 @@ claude plugin validate packages/mcp-server
 claude --plugin-dir packages/mcp-server
 ```
 
-The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.1` — a marketplace install gets the
+The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.2` — a marketplace install gets the
 repo's **source**, never a built `dist`, so the server comes from the registry; the version is
 pinned — and reads the same `PMP_*` names from your shell — source your env file before launching. For the **managed** profile,
 export `PMP_INFRA_MODE=managed` and `PMP_OFFMARKET_API_KEY` in place of the local endpoint set;
