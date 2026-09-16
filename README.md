@@ -1,7 +1,6 @@
 # offmarket-plugins
 
-Claude Code plugin marketplace for **Off Market**. Marketplace only — the code ships as the
-npm package [`@off-market/pmp-mcp`](https://www.npmjs.com/package/@off-market/pmp-mcp).
+Claude Code plugin marketplace for **Off Market**. Marketplace only — the code ships as the npm package [`@off-market/pmp-mcp`](https://www.npmjs.com/package/@off-market/pmp-mcp).
 
 ## Install
 
@@ -28,4 +27,4 @@ Private Polymarket trading over the starknet-privacy pool. Ships these skills:
 | `plan-betting-strategy` | Sizing/staging a position under the operator's caps. |
 | `write-trading-bot` | Scripting against `@starkware-libs/pmp-trading-core` directly. |
 
-Mirrors the private `offmarket` repo's `packages/mcp-server` at commit `fc681b09`; refreshed each `pmp-v*` release.
+Mirrors the private `offmarket` repo's `packages/mcp-server` at commit `3ff282f3`; refreshed each `pmp-v*` release.
