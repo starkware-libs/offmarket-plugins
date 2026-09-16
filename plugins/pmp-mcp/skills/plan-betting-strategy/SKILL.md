@@ -1,6 +1,6 @@
 ---
 name: plan-betting-strategy
-description: Use when sizing, staging, or planning a Polymarket position through pmp-mcp — how much per order, how to split a position across orders under the operator's cap, and what to check before and after each leg. Covers PMP_MAX_ORDER_USDC, order outcomes, and when to stop.
+description: Use when sizing, splitting, or staging a bet under the per-order cap — how much per order — while planning a Polymarket position through pmp-mcp, including how to split a position across orders under the operator's cap, and what to check before and after each leg. Covers PMP_MAX_ORDER_USDC, order outcomes, and when to stop.
 ---
 
 # Plan a betting strategy

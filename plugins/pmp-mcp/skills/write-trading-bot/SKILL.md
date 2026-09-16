@@ -1,6 +1,6 @@
 ---
 name: write-trading-bot
-description: Use when writing a script, bot, or automation that trades Polymarket through @starkware-libs/pmp-trading-core rather than through the pmp-mcp MCP tools — client setup, storage and resume, error classification, fail-closed behaviour, and key hygiene.
+description: Use when writing a bot or script against @starkware-libs/pmp-trading-core instead of MCP tools — automation that trades Polymarket rather than through the pmp-mcp MCP tools, client setup, storage and resume, error classification, fail-closed behaviour, and key hygiene.
 ---
 
 # Write a trading bot
