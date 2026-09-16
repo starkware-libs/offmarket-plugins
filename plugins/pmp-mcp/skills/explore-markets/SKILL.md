@@ -1,6 +1,6 @@
 ---
 name: explore-markets
-description: Use when finding a Polymarket market to trade, comparing outcomes, or reading a market's price, liquidity, tick size, or minimum order size through the pmp-mcp server. Covers search_markets, get_market_quote, and handing a tokenId to the trade prompt.
+description: Use when you need to find or search a Polymarket market to trade, compare outcomes, or read a market's price, liquidity, tick size, or minimum order size through the pmp-mcp server. Covers search_markets, get_market_quote, and handing a tokenId to the trade prompt.
 ---
 
 # Explore markets
