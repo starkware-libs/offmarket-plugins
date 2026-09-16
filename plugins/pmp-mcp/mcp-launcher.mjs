@@ -1,7 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import process from 'node:process';
 
-const packageSpec = '@off-market/pmp-mcp@0.1.3';
+const packageSpec = '@off-market/pmp-mcp@0.1.4';
 const isWindows = process.platform === 'win32';
 const npm = isWindows ? 'npm.cmd' : 'npm';
 

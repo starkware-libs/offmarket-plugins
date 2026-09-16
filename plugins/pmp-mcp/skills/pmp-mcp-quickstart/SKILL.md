@@ -53,7 +53,7 @@ There are exactly two complete profiles, and they are mutually exclusive. Ask fi
   repeat it, tell them it is now in the transcript and should be revoked, and point them at
   `set-key`. That is the whole configuration: no endpoint, no upstream credential.
   Leave `PMP_OFFMARKET_GATEWAY_URL` commented out unless you are deliberately testing against
-  the dev gateway `https://test.offmarket.se-dev.io/mcp`; confirm which one you are pointed at
+  the dev gateway `https://test.offmarket.sw-dev.io/mcp`; confirm which one you are pointed at
   with `pmp-mcp check`, which prints the gateway **host**. Skip to step 4.
 - **Neither** — send the user to **offmarket.cx**, connect a wallet or sign in, and press
   **Generate API key**. Do **not** invent a prover, indexer or paymaster URL on their behalf,
@@ -106,16 +106,23 @@ Builder-signed calls — a documented degrade, not a failed start — so set it 
 size. When a user says "paymaster key" or "prover", map it to the name above — do not guess a
 variant. The README's env table says what each one means.
 
-`PMP_EVM_PRIVATE_KEY` is **not** yours to supply: `init` generates a fresh identity, stores it in
-the **OS keychain**, writes only a `keychain:<id>` reference into the 0600 file, and prints the
-derived **EVM address** — that address is what gets funded in step 7. Never ask for a private key
-and never repeat one back; a user importing an existing identity runs `pmp-mcp init --no-key` and
-supplies theirs as the `PMP_EVM_PRIVATE_KEY` environment variable. If `init` reports the keychain
-refused, the first remedy is to unlock it and run again; only on a host that truly has none
-(container, CI, headless Linux) does `pmp-mcp init --print-key` hand the key over once, for that
-same environment variable — **the user runs that themselves, in their own terminal**: never run
-it for them and never repeat its output back, or the key lands in this transcript forever. The keychain keeps the key out of repos, backups and file sync — it
-does not protect against another process running as the same user.
+`PMP_EVM_PRIVATE_KEY` is **not** yours to supply: `init` generates a fresh identity, stores it,
+writes only a reference into the 0600 file, and prints the derived **EVM address** — that address
+is what gets funded in step 7. Never ask for a private key and never repeat one back; a user
+importing an existing identity runs `pmp-mcp init --no-key` and supplies theirs as the
+`PMP_EVM_PRIVATE_KEY` environment variable.
+
+Where the key goes (`--key-store`, or `PMP_KEY_STORE`; default `auto`):
+- `auto` — the **OS keychain** (`keychain:<id>`) if one answers within 5s, else a **0600 key
+  file** under `$XDG_CONFIG_HOME/pmp-mcp` (`keyfile:<id>`), the way `gh` does it.
+- `file` — always the key file. Use it on **headless Linux, containers and CI**, where there is
+  no Secret Service to answer.
+- `keychain` — keychain or nothing; `init` writes nothing and exits 1 if it refuses.
+
+`pmp-mcp init --print-key` still hands the key over once for the user's own secrets manager —
+**the user runs that themselves, in their own terminal**: never run it for them and never repeat
+its output back, or the key lands in this transcript forever. Neither store protects against
+another process running as the same user.
 
 In the managed profile the only secrets are the generated `PMP_EVM_PRIVATE_KEY` and `PMP_OFFMARKET_API_KEY`.
 
@@ -135,7 +142,9 @@ and the server refuses to start.
 pmp-mcp check
 ```
 
-It loads `./.env.pmp` when present (or `--env-file <path>`); shell values win over the file. One
+It loads the env file when present; shell values win over the file. The **server** loads the
+same file by the same order, so a green `check` is a startable server:
+`--env-file <path>` → `$PMP_ENV_FILE` → `./.env.pmp` → `~/.config/pmp-mcp/.env.pmp`. One
 line per variable: `set`, `missing`, or `malformed: <reason>`, values never printed. It
 exits non-zero on any problem and does **not** open the durable store, so it is safe against a
 running server. Fix what it names and re-run until it says `ok.` — including the variables the
@@ -156,7 +165,12 @@ the others do not read `.claude/skills`, so tell the user which directory their 
 a copy in the other one would be invisible) and then **prints** the MCP server snippet for
 it — `.mcp.json`, `~/.codex/config.toml`, `.cursor/mcp.json`, or `opencode.json`. It never writes
 an MCP config: paste the snippet yourself, so your other servers survive. The snippet carries
-variable NAMES only; the values come from your shell, so source the env file before launching.
+variable NAMES only; the values come from the env file above, so **no shell exports are needed**.
+
+**Claude Code plugin.** Same story: the plugin-launched server reads `./.env.pmp`,
+`$PMP_ENV_FILE`, or `~/.config/pmp-mcp/.env.pmp`. If the plugin shows only "Connection closed",
+run `pmp-mcp` by hand in a terminal — the host hides the server's stderr, which names the file it
+loaded and the reason it refused.
 
 ## 6. Then connect
 
@@ -195,8 +209,8 @@ looking for markets until the user answers:
 > minus 0.20 USDC** — the paymaster keeps that much on the address to pay Polygon gas in USDC.
 > Send 10.00 and we deposit 9.80. Tell me when it has landed and I will run `deposit_to_pool`.
 >
-> One thing first: **back up your keychain entry** (service `pmp-mcp`). `init` generated that
-> identity and the keychain holds the only copy of its key — no seed phrase, no copy on any
+> One thing first: **back up whatever holds your key** — the `pmp-mcp` keychain entry, or the
+> `identity-<id>.key` file `init` named. `init` generated that identity and that is the only copy of its key — no seed phrase, no copy on any
 > server. Lose it and you lose whatever is on that address and in the pool behind it. Keep
 > `.env.pmp` too: it holds the reference that finds the key.
 
@@ -232,6 +246,25 @@ exceed a budget the user stated. `PMP_MAX_ORDER_USDC` already bounds every singl
 per-leg confirmation buys nothing and turns one trade into six prompts.
 
 ## When a start still refuses
+
+**"Connection closed" or a connect timeout — STOP AND HAND IT BACK.** The host hides the
+server's stderr, and that stderr is the whole answer. Do **not** read or disassemble the
+plugin's source or `dist/`, `~/.claude.json`, MCP host config, or any other file on this
+machine: none of them contain the failure, and the user's files are not yours to search. Ask
+the user to run, in a terminal, in the directory they start their agent from:
+
+```
+pmp-mcp check
+pmp-mcp                 # Ctrl-C after a few seconds
+```
+
+and paste the output. Then stop and wait for it. The first line of `pmp-mcp` names the env file
+it loaded, or `no env file`.
+
+**A locked OS keychain** no longer hangs: `pmp-mcp` gives up after 5s and prints one stderr line
+saying so. Tell the user to unlock their keychain (on macOS, answer the "node wants to access
+pmp-mcp" prompt with Always Allow), or to re-run `pmp-mcp init --key-store file` in a fresh
+directory to keep the key in a 0600 file instead.
 
 The server prints one line naming the variable and exits non-zero. Fix that variable and re-run
 `pmp-mcp check`. Do not work around a refusal, and do not restart hoping it takes — a refusal is

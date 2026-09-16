@@ -4,6 +4,7 @@
       "command": "node",
       "args": ["${CLAUDE_PLUGIN_ROOT}/mcp-launcher.mjs"],
       "env": {
+        "PMP_ENV_FILE": "${PMP_ENV_FILE:-}",
         "PMP_INFRA_MODE": "${PMP_INFRA_MODE:-}",
         "PMP_EVM_PRIVATE_KEY": "${PMP_EVM_PRIVATE_KEY:-}",
         "PMP_STORAGE_DIR": "${PMP_STORAGE_DIR:-}",

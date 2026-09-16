@@ -27,4 +27,4 @@ Private Polymarket trading over the starknet-privacy pool. Ships these skills:
 | `plan-betting-strategy` | Sizing/staging a position under the operator's caps. |
 | `write-trading-bot` | Scripting against `@starkware-libs/pmp-trading-core` directly. |
 
-Mirrors the private `offmarket` repo's `packages/mcp-server` at commit `3ff282f3`; refreshed each `pmp-v*` release.
+Mirrors the private `offmarket` repo's `packages/mcp-server` at commit `bdcdaab9` (`pmp-v0.1.4`); refreshed each `pmp-v*` release. Node 22+ recommended.

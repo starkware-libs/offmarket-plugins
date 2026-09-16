@@ -10,7 +10,7 @@ Two exclusive infrastructure profiles. Mixed env **fails at startup** (names onl
 | --- | --- | --- |
 | `PMP_INFRA_MODE` | `managed` | `local` |
 | Infra credentials | `PMP_OFFMARKET_API_KEY` (a path segment of every gateway URL) | Required: `PMP_STARKNET_RPC_URL`, `PMP_PROVER_URL`, `PMP_INDEXER_URL`, `PMP_AVNU_PAYMASTER_API_KEY`. `PMP_POLYGON_RPC_URL` and `PMP_AVNU_PAYMASTER_URL` default to public endpoints; `PMP_BUILDER_CREDS` is optional (unset ⇒ relayer 401s on Builder calls) |
-| Default gateway | `https://offmarket.cx/mcp/` (override for the dev gateway `https://test.offmarket.se-dev.io/mcp`) | — |
+| Default gateway | `https://offmarket.cx/mcp/` (override for the dev gateway `https://test.offmarket.sw-dev.io/mcp`) | — |
 | Forbidden | Local service vars (`PMP_STARKNET_RPC_URL`, `PMP_PROVER_URL`, `PMP_INDEXER_URL`, `PMP_POLYGON_RPC_URL`, `PMP_POLYGON_BUNDLER_URL`, `PMP_AVNU_PAYMASTER_API_KEY`, `PMP_AVNU_PAYMASTER_URL`, `PMP_BUILDER_CREDS`) | `PMP_OFFMARKET_API_KEY`, `PMP_OFFMARKET_GATEWAY_URL` |
 | Egress | Gateway only (derived `/mcp/*` paths) | **Zero** to `offmarket.cx` or the configured gateway |
 | Execution / state | This process: identity key, `PMP_STORAGE_DIR`, jobs | Same |
@@ -25,7 +25,7 @@ everything else is per-profile (Managed / Local below) or optional here.
 
 | Variable | Required | Meaning |
 | --- | --- | --- |
-| `PMP_EVM_PRIVATE_KEY` | ✅ | Identity seed. Either a raw 32-byte hex key (how servers and containers inject it — it always wins) or `keychain:<id>`, the reference `init` writes after storing the key in the **OS keychain** (service `pmp-mcp`, account `<id>`). Resolved in memory at start; never logged, never written back to disk, never mapped into core. |
+| `PMP_EVM_PRIVATE_KEY` | ✅ | Identity seed. A raw 32-byte hex key (how servers and containers inject it — it always wins), `keychain:<id>` (**OS keychain**, service `pmp-mcp`, account `<id>`) or `keyfile:<id>` (a 0600 file under `$XDG_CONFIG_HOME/pmp-mcp`). Resolved in memory at start; never logged, never written back to disk, never mapped into core. |
 | `PMP_STORAGE_DIR` | — | Durable store (**burn cursors**). Defaults to `~/.local/share/pmp-mcp/<eoa-address>` (per identity), printed to stderr at start. Lost dir = lost recovery. Locked while running. **In a container:** mount a volume and set this, or the cursors die with it. |
 | `PMP_OZ_ACCOUNT_CLASS_HASH` | — | Account class hash; defaults to the mainnet OZ class this project deploys (`PMP_OZ_ACCOUNT_CLASS_HASH_MAINNET` wins if set). |
 | `PMP_MAX_ORDER_USDC` | — | Per-order notional cap. **UNSET REFUSES** every order tool (`ORDER_CAP_UNSET`). |
@@ -88,7 +88,8 @@ and `check` read `./.env.pmp` from the current directory.
 
 ```
 <pmp-mcp> init              # writes ./.env.pmp 0600 (annotated; refuses to overwrite)
-<pmp-mcp> init --print-key  # only when this host has no keychain: hands you the key once
+<pmp-mcp> init --key-store file  # headless Linux / container / CI: key to a 0600 file
+<pmp-mcp> init --print-key       # hands you the key once, for your own secrets manager
 <pmp-mcp> init --managed    # the managed template instead: gateway + API key, no local endpoints
 $EDITOR .env.pmp            # fill every blank; replace the free defaults if you have better
 <pmp-mcp> check             # per-variable set / missing / malformed / default, values redacted, exit 1 on any problem
@@ -107,20 +108,24 @@ confirmation only.
 
 ### Where the identity key lives
 
-`init` stores the generated key in the **OS keychain** — macOS Keychain, Linux Secret Service,
-Windows Credential Manager — under service `pmp-mcp`, and writes only `PMP_EVM_PRIVATE_KEY=keychain:<id>`
-into `./.env.pmp` (still **0600**; it holds your other secrets). The key is never **in plaintext**
-on disk; the backend keeps its own encrypted store.
+`init` picks a store (`--key-store`, or `PMP_KEY_STORE`; default `auto`) and writes only a
+reference into `./.env.pmp` (still **0600**; it holds your other secrets):
 
-**What that buys:** the key is out of your repo, your backups, your dotfile sync, and any file you
-paste or copy. It is **not** a sandbox — anything running as your user can ask the keychain for it.
+| Store | Where the key goes | Reference |
+|---|---|---|
+| `auto` (default) | the OS keychain if one answers, else a key file | either |
+| `keychain` | macOS Keychain / Linux Secret Service / Windows Credential Manager, service `pmp-mcp` | `keychain:<id>` |
+| `file` | `$XDG_CONFIG_HOME/pmp-mcp/identity-<id>.key`, mode **0600** in a 0700 dir (what `gh` does) | `keyfile:<id>` |
 
-**Keychain refuses** (locked, a dismissed macOS prompt, or none at all — headless Linux, a
-container, CI, WSL): `init` writes **nothing** and exits 1. `@napi-rs/keyring` cannot tell a
-transient refusal from an absent keychain, so **retrying** after unlocking is the first remedy.
-On a host that genuinely has none, `pmp-mcp init --print-key` prints the key **once** to stdout,
-leaves the key line blank, and you inject it as the `PMP_EVM_PRIVATE_KEY` environment variable
-from a secrets manager, a systemd credential, or a CI secret — the supported server path.
+Headless Linux, containers and CI want `file`. Either way the key is out of your repo, your
+backups and your dotfile sync — neither is a sandbox: anything running as your user can read it.
+
+**A locked keychain no longer hangs.** Every keyring call runs in a child process with a **5s**
+deadline (`PMP_KEYCHAIN_TIMEOUT_MS`); on timeout `pmp-mcp` prints one stderr line saying the
+keychain is probably locked and, under `auto`, falls back to the key file. Under `--key-store
+keychain` it writes **nothing** and exits 1 — unlock and retry. `pmp-mcp init --print-key` still
+prints the key **once** to stdout for injection as the `PMP_EVM_PRIVATE_KEY` environment
+variable from a secrets manager, a systemd credential, or a CI secret.
 
 **Legacy plaintext files migrate themselves.** A serve start (when the file's key is the one the
 run is using) or `check` that finds a raw key in `./.env.pmp` moves it into the keychain,
@@ -138,15 +143,18 @@ daemon or use `--print-key` plus the environment variable.
 **macOS:** the first access after a Node upgrade re-prompts ("node wants to access pmp-mcp").
 Click **Always Allow**, or a headless agent run blocks on an invisible dialog.
 
-A start or `check` with a `keychain:<id>` it cannot resolve — no keychain, or the entry is gone —
+A start or `check` with a `keychain:<id>` or `keyfile:<id>` it cannot resolve — no keychain, the entry is gone, or the key file is missing or not 0600 —
 fails with one line naming `PMP_EVM_PRIVATE_KEY` and the env-var remedy.
 
 `check` never opens `PMP_STORAGE_DIR`, so it is safe to run against a live server; in **managed**
 mode it makes one request to the gateway (see below). It covers `PMP_OZ_ACCOUNT_CLASS_HASH`,
 which the startup resolvers do not see — felt shape when you set one, `default` when you do not
 (core bakes the mainnet OZ class in) — and reports `PMP_BUILDER_CREDS` as `set` / `unset` (unset starts fine and refuses every
-order tool). It also reads `./.env.pmp` (or `--env-file <path>`) when present, filling only names
-your shell has not already set — so `check` right after `init` sees what you just wrote.
+order tool). It also reads the env file when present, filling only names
+your shell has not already set — so `check` right after `init` sees what you just wrote. **The
+server itself reads the same file by the same order**, so a green `check` is a startable server:
+`--env-file <path>` → `$PMP_ENV_FILE` → `./.env.pmp` → `~/.config/pmp-mcp/.env.pmp`, first one
+that exists. No shell exports are needed.
 
 `init` pre-fills what is public or shared: `PMP_INFRA_MODE=local`, a storage dir, a conservative
 `PMP_MAX_ORDER_USDC`, the public OpenZeppelin account class hash, two **free public** RPC
@@ -156,8 +164,8 @@ rate limit for everyone who never changed it and can be revoked; create your own
 Polymarket builder program before trading real size.
 
 It also **generates `PMP_EVM_PRIVATE_KEY`** — a fresh 32-byte CSPRNG identity — stores it in the
-OS keychain (above) and prints only the derived EVM address, how to fund it, and a reminder to
-**back up that keychain entry**: it is the only copy of the key. The first `fund_wallet` seeds its index from CHAIN, so a fresh
+key store (above) and prints only the derived EVM address, how to fund it, and a reminder to
+**back up whatever holds it**: it is the only copy of the key. The first `fund_wallet` seeds its index from CHAIN, so a fresh
 identity starts at 0 with no floor to set. Pass `--no-key` to leave the key line blank and
 import an existing identity instead. Every operator-owned service endpoint still stays blank by design:
 a defaulted prover or paymaster URL would silently route proofs through a host you did not choose.
@@ -251,9 +259,13 @@ claude plugin validate packages/mcp-server
 claude --plugin-dir packages/mcp-server
 ```
 
-The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.3` — a marketplace install gets the
+The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.4` — a marketplace install gets the
 repo's **source**, never a built `dist`, so the server comes from the registry; the version is
-pinned — and reads the same `PMP_*` names from your shell — source your env file before launching. For the **managed** profile,
+pinned. It reads the same `PMP_*` names from your shell, **and the env file** (`./.env.pmp`,
+`$PMP_ENV_FILE`, or `~/.config/pmp-mcp/.env.pmp`), so a plugin install needs no shell exports.
+If the plugin shows only "Connection closed", run `pmp-mcp` by hand in a terminal — the host
+hides the server's stderr, which names the file it loaded and the reason it refused.
+For the **managed** profile,
 export `PMP_INFRA_MODE=managed` and `PMP_OFFMARKET_API_KEY` in place of the local endpoint set;
 `PMP_CIRCLE_PAYMASTER_ENABLED=true` opts into the
 gasless deposit path in either profile. An optional variable left unset expands to empty and is
@@ -301,6 +313,11 @@ already exists. Add `--force` only to replace a skill directory you have edited.
 `.agents/skills` is the shared convention for Codex, Cursor, and opencode; **Claude Code does not
 read it**, which is why the subcommand takes an `--agent`.
 
+`--agent codex` additionally upserts a marked `pmp-mcp` section into `AGENTS.md` (`~/.codex/AGENTS.md`
+with `--global`), rewriting only between its own markers. Codex truncates a skill's catalog
+description, so that section is what routes it to the skills and to `get_status`. Restart Codex after
+an install.
+
 The printed snippets, with `<abs>` the absolute path to the **repo root**:
 
 ```json
@@ -332,12 +349,12 @@ Each host gets its own form, chosen so an unset name arrives **empty** (which th
 as unset) rather than as literal text: Claude Code `${NAME:-}`, Cursor `${env:NAME}`, Codex a
 names-only `env_vars` passthrough. opencode gets **no** `environment` map: it substitutes
 `{env:NAME}` as text before parsing the file, so a JSON value such as `PMP_BUILDER_CREDS` breaks
-the config — the server inherits your shell env instead (verified live), so source the env file
-before launching. Cursor does not document its unset behaviour — export every listed name
+the config — the server inherits your shell env, and reads the env file, instead (verified
+live). Cursor does not document its unset behaviour — export every listed name
 before launching; empty is fine.
 
 `install` prints the full variable list; the excerpts above are abbreviated. Values never
-appear in the output — source your env file, then start the agent.
+appear in the output — the server reads them from the env file itself.
 
 Whether these clients surface an MCP server's `instructions` or its `prompts` as slash commands
 is client-specific and unverified, so each skill stands on its own and names `/pmp-mcp:trade` and
