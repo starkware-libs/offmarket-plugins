@@ -28,21 +28,36 @@ this skill's — read it rather than restating it here.
 ## Skeleton
 
 ```ts
-import { createTradingClient, openFileStorage } from '@starkware-libs/pmp-trading-core';
+import {
+  coreEnvForProfile, createTradingClient, infrastructureFromEnv,
+  openFileStorage, resolveInfrastructure,
+} from '@starkware-libs/pmp-trading-core';
 
-const client = await createTradingClient({
-  identity: { kind: 'evm-private-key', privateKey: process.env.BOT_KEY as `0x${string}` },
-  storage: openFileStorage(process.env.BOT_STORAGE_DIR!),
-  env: process.env,
-});
-try {
-  // reads, then flows
-} finally {
-  client.close();
+async function main() {
+  const infrastructure = infrastructureFromEnv(process.env);
+  const client = await createTradingClient({
+    identity: { kind: 'evm-private-key', privateKey: process.env.BOT_KEY as `0x${string}` },
+    storage: openFileStorage(process.env.BOT_STORAGE_DIR!),
+    infrastructure,
+    env: coreEnvForProfile(resolveInfrastructure(infrastructure), process.env),
+  });
+  try {
+    // reads, then flows
+  } finally {
+    client.close();
+  }
 }
+main();
 ```
 
-Three things that skeleton is load-bearing about:
+Four things that skeleton is load-bearing about:
+
+- **`infrastructure`, and an `env` reconciled with it.** `infrastructure` is required; a bare
+  `env: process.env` leaves the managed routes unresolved and the open fails on the first
+  local-only name it cannot find.
+- **`main()`, not top-level await.** A script run in a plain `npm i` directory has no
+  `"type": "module"`, so a TS runner transforms it to CommonJS, where top-level await cannot be
+  expressed. An ESM project may hoist the body.
 
 - **File-backed storage, never in-memory.** The store holds the burn cursors; in-memory turns
   every restart into a possible second burn.
