@@ -151,7 +151,9 @@ running server. Fix what it names and re-run until it says `ok.` — including t
 startup resolvers do not see themselves. In the managed profile it also prints
 `gateway: <host>` so you can see at a glance whether you are pointed at production or the dev
 gateway; the key itself never appears in its output. If a tool later refuses with a config code, re-run
-`check` before theorising.
+`check` before theorising. A run from a directory with no `./.env.pmp` falls through to the
+user-global file silently otherwise — `get_status`'s `config.envFileSource` names which rung
+answered (`"global"` means that fallback fired), and stderr says so explicitly on start.
 
 ## 5. Wire it into your agent
 

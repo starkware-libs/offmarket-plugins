@@ -259,7 +259,7 @@ claude plugin validate packages/mcp-server
 claude --plugin-dir packages/mcp-server
 ```
 
-The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.4` — a marketplace install gets the
+The bundled `.mcp.json` runs `npx -y @off-market/pmp-mcp@0.1.5` — a marketplace install gets the
 repo's **source**, never a built `dist`, so the server comes from the registry; the version is
 pinned. It reads the same `PMP_*` names from your shell, **and the env file** (`./.env.pmp`,
 `$PMP_ENV_FILE`, or `~/.config/pmp-mcp/.env.pmp`), so a plugin install needs no shell exports.
@@ -383,6 +383,11 @@ plus the ones in-flight cursors name (`cursor-named-slots` is the cursors alone,
 funding that already completed); neither is a chain scan, so a wallet funded from another store is
 still invisible. And `totalSpendableUnknown: true` **instead of** a total whenever a covered
 read failed. The **pool address is never here**; it comes from `get_pool_identity` alone.
+
+`get_status` also adds `config: {envFile, envFileSource}` — which file configured this run
+(`"flag" | "PMP_ENV_FILE" | "project" | "global" | "none"`). `envFileSource: "global"` means no
+`./.env.pmp` was found in the working directory and the shared `~/.config/pmp-mcp/.env.pmp`
+identity loaded instead — check this before any fund-moving call from an unfamiliar directory.
 
 ## Supervised live test
 
